@@ -21,8 +21,9 @@ ORANGE = (255, 165, 0)
 DARK_GRAY = (100, 100, 100)
 
 # Fonts
-font = pygame.font.Font(None, 36)
-large_font = pygame.font.Font(None, 48)
+font = pygame.font.Font("assets/fonts/MegamaxJones-elRm.ttf", 20)
+med_font = pygame.font.Font("assets/fonts/SuperPixel-m2L8j.ttf", 25)
+large_font = pygame.font.Font("assets/fonts/SuperPixel-m2L8j.ttf", 30)
 
 # Difficulty levels
 difficulties = {"Easy": 3, "Medium": 5, "Hard": 7}
@@ -32,6 +33,8 @@ enemy_speed = difficulties[difficulty] + 2
 
 # UI State
 game_active = False
+difficulty_selection = False
+game_over = False
 
 # Car dimensions
 car_width, car_height = 50, 60
@@ -39,7 +42,7 @@ player_car = pygame.Rect(WIDTH // 2 - car_width // 2, HEIGHT - 120, car_width, c
 
 # Enemy car settings
 enemy_width, enemy_height = 50, 60
-enemy_car = pygame.Rect(random.randint(50, WIDTH - 50), 100, enemy_width, enemy_height)
+enemy_cars = []  # List to store multiple enemy cars
 
 # Score
 score = 0
@@ -68,20 +71,35 @@ def draw_button(text, x, y, w, h, base_color, action=None):
 
 # Change difficulty
 def set_difficulty(level):
-    global difficulty, player_speed, enemy_speed
+    global difficulty, player_speed, enemy_speed, enemy_cars, game_active, difficulty_selection
     difficulty = level
     player_speed = difficulties[difficulty]
     enemy_speed = difficulties[difficulty] + 2
 
-# Start game
-def start_game():
-    global game_active, score, player_car, enemy_car
+    num_enemies = {"Easy": 2, "Medium": 3, "Hard": 5}
+    enemy_cars = [
+        pygame.Rect(random.randint(50, WIDTH - 50), random.randint(-300, -50), enemy_width, enemy_height)
+        for _ in range(num_enemies[difficulty])
+    ]
     game_active = True
+    difficulty_selection = False
+
+# Start game
+def show_difficulty_selection():
+    global difficulty_selection
+    difficulty_selection = True
+
+def reset_game():
+    global game_active, difficulty_selection, game_over, score
+    game_active = False
+    difficulty_selection = False
+    game_over = False
     score = 0
-    player_car.x = WIDTH // 2 - car_width // 2
-    player_car.y = HEIGHT - 120
-    enemy_car.x = random.randint(50, WIDTH - 50)
-    enemy_car.y = -100
+
+def trigger_game_over():
+    global game_active, game_over
+    game_active = False
+    game_over = True
 
 # Running the game
 running = True
@@ -94,18 +112,30 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
-    if not game_active:
+    if not game_active and not difficulty_selection and not game_over:
         # Display menu
         title_text1 = large_font.render("CounterFlow", True, BLACK)
-        screen.blit(title_text1, (WIDTH // 2 - title_text1.get_width() // 2, 30))
+        screen.blit(title_text1, (WIDTH // 2 - title_text1.get_width() // 2, 200))
         
-        title_text2 = large_font.render("Survive", True, RED)
-        screen.blit(title_text2, (WIDTH // 2 - title_text2.get_width() // 2, 80))
+        title_text2 = med_font.render("Survive", True, RED)
+        screen.blit(title_text2, (WIDTH // 2 - title_text2.get_width() // 2, 250))
         
-        draw_button("Start", WIDTH // 2 - 75, 150, 150, 50, RED, start_game)
+        draw_button("Start", WIDTH // 2.15 - 75, HEIGHT // 2, 180, 60, RED, show_difficulty_selection)
+    elif difficulty_selection:
+        difficulty_text = large_font.render("Select Difficulty", True, BLACK)
+        screen.blit(difficulty_text, (WIDTH // 2 - difficulty_text.get_width() // 2, 180))
+        
         draw_button("Easy", WIDTH // 2 - 75, 250, 150, 50, GREEN, lambda: set_difficulty("Easy"))
         draw_button("Medium", WIDTH // 2 - 75, 320, 150, 50, YELLOW, lambda: set_difficulty("Medium"))
         draw_button("Hard", WIDTH // 2 - 75, 390, 150, 50, ORANGE, lambda: set_difficulty("Hard"))
+    elif game_over:
+        game_over_text = large_font.render("Game Over", True, RED)
+        screen.blit(game_over_text, (WIDTH // 2 - game_over_text.get_width() // 2, HEIGHT // 3))
+        
+        score_text = large_font.render(f"Score: {score}", True, BLACK)
+        screen.blit(score_text, (WIDTH // 2 - score_text.get_width() // 2, HEIGHT // 3 + 50))
+        
+        draw_button("Back to Menu", WIDTH // 2.15 - 75, HEIGHT // 2, 180, 60, GRAY, reset_game)
     else:
         # Player movement
         keys = pygame.key.get_pressed()
@@ -114,23 +144,25 @@ while running:
         if keys[pygame.K_RIGHT] and player_car.x < WIDTH - car_width:
             player_car.x += player_speed
 
-        # Move enemy car
-        enemy_car.y += enemy_speed
-        if enemy_car.y > HEIGHT:
-            enemy_car.y = -100
-            enemy_car.x = random.randint(50, WIDTH - 50)
-            score += 1  # Increase score when enemy car resets
+        # Move enemy cars
+        for enemy in enemy_cars:
+            enemy.y += enemy_speed
+            if enemy.y > HEIGHT:
+                enemy.y = -100
+                enemy.x = random.randint(50, WIDTH - 50)
+                score += 1  # Increase score when enemy resets
 
         # Check for collision
-        if player_car.colliderect(enemy_car):
-            print("Game Over")
-            game_active = False
+        for enemy in enemy_cars:
+            if player_car.colliderect(enemy):
+                trigger_game_over()
 
         # Draw player car
         pygame.draw.rect(screen, BLUE, player_car)
 
-        # Draw enemy car
-        pygame.draw.rect(screen, RED, enemy_car)
+        # Draw enemy cars
+        for enemy in enemy_cars:
+            pygame.draw.rect(screen, RED, enemy)
 
         # Display score
         score_text = font.render(f"Score: {score}", True, BLACK)
